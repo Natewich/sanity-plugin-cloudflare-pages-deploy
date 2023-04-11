@@ -43,7 +43,7 @@ export interface Deployments {
   }
 }
 
-export interface VercelDeployConfig {
+export interface CloudflarePagesDeployConfig {
   name?: string
   icon?: React.ReactNode
   title?: string

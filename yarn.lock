@@ -6467,6 +6467,10 @@ sanity-diff-patch@^1.0.9:
   dependencies:
     diff-match-patch "^1.0.5"
 
+"sanity-plugin-cloudflare-pages-deploy@link:.yalc/sanity-plugin-cloudflare-pages-deploy":
+  version "0.0.0"
+  uid ""
+
 sanity@^3.2.5:
   version "3.2.5"
   resolved "https://registry.yarnpkg.com/sanity/-/sanity-3.2.5.tgz#cdde5f74e9b12b7de07b936ae98f9eb45ef20044"
