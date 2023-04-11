@@ -3,7 +3,7 @@ import { route } from 'sanity/router'
 
 import { default as deployIcon } from './deploy-icon'
 import type { CloudflarePagesDeployConfig } from './types'
-import CloudflarePagesDeploy from './vercel-deploy'
+import CloudflarePagesDeploy from './cloudflare-deploy'
 
 export const cloudflarePagesDeployTool =
   definePlugin<CloudflarePagesDeployConfig | void>((options) => {
@@ -13,7 +13,7 @@ export const cloudflarePagesDeployTool =
       name: 'sanity-plugin-cloudflare-pages-deploy',
       tools: [
         {
-          name: name || 'cloudflare-pages-deploy',
+          name: name || 'deploy',
           title: title || 'Deploy',
           icon: icon || deployIcon,
           component: CloudflarePagesDeploy,
