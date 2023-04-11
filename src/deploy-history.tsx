@@ -20,35 +20,31 @@ import DeployStatus from './deploy-status'
 import type { Deployments, SanityDeploySchema } from './types'
 
 interface DeployHistoryProps
-  extends Omit<SanityDeploySchema, '_id' | 'name' | 'disableDeleteAction'> {}
+  extends Omit<SanityDeploySchema, 'id' | 'name' | 'disableDeleteAction'> {}
 const DeployHistory: React.FC<DeployHistoryProps> = ({
-  url,
-  vercelProject,
-  vercelToken,
-  vercelTeam,
+  cloudflareApiEndpointUrl,
+  cloudflareProject,
+  cloudflareAPIKey,
+  cloudflareEmail,
 }) => {
   const [deployments, setDeployments] = useState<Deployments[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(false)
 
   useEffect(() => {
-    if (!vercelProject) {
+    if (!cloudflareProject) {
       return
     }
     setLoading(true)
 
     axios
-      .get(
-        `https://api.vercel.com/v5/now/deployments?projectId=${vercelProject}&meta-deployHookId=${url
-          .split('/')
-          .pop()}&limit=6${vercelTeam?.id ? `&teamId=${vercelTeam?.id}` : ''}`,
-        {
-          headers: {
-            'content-type': 'application/json',
-            Authorization: `Bearer ${vercelToken}`,
-          },
-        }
-      )
+      .get(cloudflareApiEndpointUrl, {
+        headers: {
+          'X-Auth-Email': cloudflareEmail,
+          'X-Auth-Key': cloudflareAPIKey,
+          'Content-Type': 'application/json',
+        },
+      })
       .then(({ data }) => {
         setDeployments(data.deployments)
         setLoading(false)
@@ -59,7 +55,12 @@ const DeployHistory: React.FC<DeployHistoryProps> = ({
         setError(true)
         console.warn(e)
       })
-  }, [url, vercelProject, vercelTeam?.id, vercelToken])
+  }, [
+    cloudflareApiEndpointUrl,
+    cloudflareProject,
+    cloudflareEmail,
+    cloudflareAPIKey,
+  ])
 
   if (loading) {
     return (
@@ -76,7 +77,7 @@ const DeployHistory: React.FC<DeployHistoryProps> = ({
     return (
       <Card padding={4} radius={2} shadow={1} tone="critical">
         <Text size={2} align="center">
-          Could not load deployments for {vercelProject}
+          Could not load deployments for {cloudflareProject}
         </Text>
       </Card>
     )
@@ -157,23 +158,6 @@ const DeployHistory: React.FC<DeployHistoryProps> = ({
                 <Text style={{ whiteSpace: 'nowrap' }} muted>
                   {spacetime.now().since(spacetime(deployment.created)).rounded}
                 </Text>
-                <Tooltip
-                  content={
-                    <Box padding={2}>
-                      <Text muted size={1}>
-                        {deployment.creator?.username}
-                      </Text>
-                    </Box>
-                  }
-                  fallbackPlacements={['right', 'left']}
-                  placement="top"
-                >
-                  <Avatar
-                    alt={deployment.creator?.username}
-                    src={`https://vercel.com/api/www/avatar/${deployment.creator?.uid}?&s=48`}
-                    size={1}
-                  />
-                </Tooltip>
               </Inline>
             </Flex>
           </Flex>

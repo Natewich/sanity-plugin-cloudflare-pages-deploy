@@ -1,13 +1,13 @@
 import React from 'react'
 
-export type StatusType =
-  | 'LOADING'
-  | 'ERROR'
-  | 'INITIATED'
-  | 'CANCELED'
-  | 'READY'
-  | 'BUILDING'
-  | 'QUEUED'
+export type StatusType = any
+// | 'LOADING'
+// | 'ERROR'
+// | 'INITIATED'
+// | 'CANCELED'
+// | 'READY'
+// | 'BUILDING'
+// | 'QUEUED'
 
 export interface VercelTeam {
   [key: string]: unknown
@@ -18,11 +18,19 @@ export interface VercelTeam {
 
 export interface SanityDeploySchema {
   _id: string
+  // name: string
+  // url: string
+  // vercelProject: string
+  // vercelTeam: VercelTeam
+  // vercelToken: string
+  // disableDeleteAction: boolean
+
   name: string
-  url: string
-  vercelProject: string
-  vercelTeam: VercelTeam
-  vercelToken: string
+  id: string
+  cloudflareApiEndpointUrl: string
+  cloudflareProject: string
+  cloudflareEmail: string
+  cloudflareAPIKey: string
   disableDeleteAction: boolean
 }
 

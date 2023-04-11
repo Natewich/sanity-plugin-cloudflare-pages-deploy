@@ -37,34 +37,52 @@ import DeployStatus from './deploy-status'
 import { useClient } from './hook/useClient'
 import type { SanityDeploySchema, StatusType } from './types'
 
-const fetcher = (url: string, token: string) =>
+const fetcher = (url: string, email: string, key: string) =>
   axios
     .get(url, {
       headers: {
-        'content-type': 'application/json',
-        Authorization: `Bearer ${token}`,
+        'X-Auth-Email': email,
+        'X-Auth-Key': key,
+        'Content-Type': 'application/json',
       },
     })
     .then((res) => res.data)
 
 const initialDeploy = {
+  name: '',
   title: '',
-  project: '',
-  team: '',
-  url: '',
-  token: '',
+  cloudflareApiEndpointUrl: '',
+  cloudflareProject: '',
+  cloudflareEmail: '',
+  cloudflareAPIKey: '',
   disableDeleteAction: false,
+
+  // name: '',
+  // title: '',
+  // project: '',
+  // team: '',
+  // url: '',
+  // token: '',
+  // disableDeleteAction: false,
 }
 
 interface DeployItemProps extends SanityDeploySchema {}
 const DeployItem: React.FC<DeployItemProps> = ({
   name,
-  url,
-  _id,
-  vercelProject,
-  vercelToken,
-  vercelTeam,
+  id,
+  cloudflareApiEndpointUrl,
+  cloudflareProject,
+  cloudflareEmail,
+  cloudflareAPIKey,
   disableDeleteAction,
+  _id,
+
+  // name,
+  // url,
+  // vercelProject,
+  // vercelToken,
+  // vercelTeam,
+  // disableDeleteAction,
 }) => {
   const client = useClient()
 
@@ -83,34 +101,9 @@ const DeployItem: React.FC<DeployItemProps> = ({
 
   const toast = useToast()
 
-  const { data: projectData } = useSWR(
-    [
-      `https://api.vercel.com/v8/projects/${vercelProject}${
-        vercelTeam?.id ? `?teamId=${vercelTeam?.id}` : ''
-      }`,
-      vercelToken,
-    ],
-    (path, token) => fetcher(path, token),
-    {
-      errorRetryCount: 3,
-      onError: (err) => {
-        setStatus('ERROR')
-        setErrorMessage(err.response?.data?.error?.message)
-        setIsLoading(false)
-      },
-    }
-  )
-
   const { data: deploymentData } = useSWR(
-    () => [
-      `https://api.vercel.com/v5/now/deployments?projectId=${
-        projectData.id
-      }&meta-deployHookId=${url.split('/').pop()}&limit=1${
-        vercelTeam?.id ? `&teamId=${vercelTeam?.id}` : ''
-      }`,
-      vercelToken,
-    ],
-    (path, token) => fetcher(path, token),
+    () => [cloudflareApiEndpointUrl, cloudflareEmail, cloudflareAPIKey],
+    (url, email, apiKey) => fetcher(url, email, apiKey),
     {
       errorRetryCount: 3,
       refreshInterval: isDeploying ? 5000 : 0,
@@ -122,14 +115,25 @@ const DeployItem: React.FC<DeployItemProps> = ({
     }
   )
 
-  const onDeploy = (_name: string, _url: string) => {
+  const onDeploy = (
+    _name: string,
+    _url: string,
+    cloudflareEmail: string,
+    cloudflareAPIKey: string
+  ) => {
     setStatus('INITIATED')
     setDeploying(true)
     setTimestamp(null)
     setBuildTime(null)
 
     axios
-      .post(url)
+      .post(cloudflareApiEndpointUrl, null, {
+        headers: {
+          'X-Auth-Email': cloudflareEmail,
+          'X-Auth-Key': cloudflareAPIKey,
+          'Content-Type': 'application/json',
+        },
+      })
       .then(() => {
         toast.push({
           status: 'success',
@@ -147,16 +151,14 @@ const DeployItem: React.FC<DeployItemProps> = ({
       })
   }
 
-  const onCancel = (id: string, token: string) => {
+  const onCancel = (deploymentId: string) => {
     setIsLoading(true)
     axios
-      .patch(`https://api.vercel.com/v12/deployments/${id}/cancel`, null, {
+      .post(`${cloudflareApiEndpointUrl}/${deploymentId}/cancel`, null, {
         headers: {
-          'content-type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-        params: {
-          ...(vercelTeam ? { teamId: vercelTeam?.id } : {}),
+          'X-Auth-Email': cloudflareEmail,
+          'X-Auth-Key': cloudflareAPIKey,
+          'Content-Type': 'application/json',
         },
       })
       .then((res) => res.data)
@@ -169,9 +171,9 @@ const DeployItem: React.FC<DeployItemProps> = ({
       })
   }
 
-  const onRemove = (_name: string, id: string) => {
+  const onRemove = (_name: string, _id: string) => {
     setIsLoading(true)
-    client.delete(id).then(() => {
+    client.delete(_id).then(() => {
       toast.push({
         status: 'success',
         title: `Successfully deleted deployment: ${_name}`,
@@ -182,67 +184,27 @@ const DeployItem: React.FC<DeployItemProps> = ({
   const onEdit = () => {
     setpendingDeploy({
       title: name,
-      project: vercelProject,
-      team: vercelTeam?.slug,
-      url,
-      token: vercelToken,
       disableDeleteAction,
+      name,
+      cloudflareApiEndpointUrl,
+      cloudflareProject,
+      cloudflareEmail,
+      cloudflareAPIKey,
     })
     setIsFormOpen(true)
   }
 
   const onSubmitEdit = async () => {
-    // If we have a team slug, we'll have to get the associated teamId to include in every new request
-    // Docs: https://vercel.com/docs/api#api-basics/authentication/accessing-resources-owned-by-a-team
-    let vercelTeamID
-    let vercelTeamName
     setIsSubmitting(true)
-
-    if (pendingDeploy.team) {
-      try {
-        const fetchTeam = await axios.get(
-          `https://api.vercel.com/v2/teams?slug=${pendingDeploy.team}`,
-          {
-            headers: {
-              Authorization: `Bearer ${pendingDeploy.token}`,
-            },
-          }
-        )
-
-        if (!fetchTeam?.data?.id) {
-          throw new Error('No team id found')
-        }
-
-        vercelTeamID = fetchTeam.data.id
-        vercelTeamName = fetchTeam.data.name
-      } catch (error) {
-        console.error(error)
-        setIsSubmitting(false)
-
-        toast.push({
-          status: 'error',
-          title: 'No Team found!',
-          closable: true,
-          description:
-            'Make sure the token you provided is valid and that the team’s slug correspond to the one you see in Vercel',
-        })
-
-        return
-      }
-    }
 
     client
       .patch(_id)
       .set({
         name: pendingDeploy.title,
-        url: pendingDeploy.url,
-        vercelProject: pendingDeploy.project,
-        vercelTeam: {
-          slug: pendingDeploy.team || undefined,
-          name: vercelTeamName || undefined,
-          id: vercelTeamID || undefined,
-        },
-        vercelToken: pendingDeploy.token,
+        cloudflareApiEndpointUrl: pendingDeploy.cloudflareApiEndpointUrl,
+        cloudflareProject: pendingDeploy.cloudflareProject,
+        cloudflareAPIKey: pendingDeploy.cloudflareAPIKey,
+        cloudflareEmail: pendingDeploy.cloudflareEmail,
         disableDeleteAction: pendingDeploy.disableDeleteAction,
       })
       .commit()
@@ -262,13 +224,13 @@ const DeployItem: React.FC<DeployItemProps> = ({
   useEffect(() => {
     let isSubscribed = true
 
-    if (deploymentData?.deployments && isSubscribed) {
-      const latestDeployment = deploymentData.deployments[0]
+    if (deploymentData?.result && isSubscribed) {
+      const latestDeployment = deploymentData.result[0]
 
-      setStatus(latestDeployment?.state || 'READY')
+      setStatus(latestDeployment?.latest_stage.status || 'READY')
 
-      if (latestDeployment?.created) {
-        setTimestamp(latestDeployment?.created)
+      if (latestDeployment?.created_on) {
+        setTimestamp(latestDeployment?.created_on)
       }
 
       setIsLoading(false)
@@ -341,19 +303,8 @@ const DeployItem: React.FC<DeployItemProps> = ({
                 radius={6}
                 fontSize={0}
               >
-                {vercelProject}
+                {cloudflareProject}
               </Badge>
-              {vercelTeam?.id && (
-                <Badge
-                  mode="outline"
-                  paddingX={3}
-                  paddingY={2}
-                  radius={6}
-                  fontSize={0}
-                >
-                  {vercelTeam?.name}
-                </Badge>
-              )}
             </Inline>
             <Code size={1}>
               <Box
@@ -363,7 +314,7 @@ const DeployItem: React.FC<DeployItemProps> = ({
                   textOverflow: 'ellipsis',
                 }}
               >
-                {url}
+                {cloudflareApiEndpointUrl}
               </Box>
             </Code>
           </Stack>
@@ -375,7 +326,7 @@ const DeployItem: React.FC<DeployItemProps> = ({
           flex={[1, 'none']}
         >
           <Inline space={2}>
-            {vercelToken && vercelProject && (
+            {cloudflareAPIKey && cloudflareProject && (
               <Box marginRight={2}>
                 <Stack space={2}>
                   <DeployStatus status={status} justify="flex-end">
@@ -416,7 +367,14 @@ const DeployItem: React.FC<DeployItemProps> = ({
               tone="positive"
               disabled={isDeploying || isLoading}
               loading={isDeploying || isLoading}
-              onClick={() => onDeploy(name, url)}
+              onClick={() =>
+                onDeploy(
+                  name,
+                  cloudflareApiEndpointUrl,
+                  cloudflareEmail,
+                  cloudflareAPIKey
+                )
+              }
               paddingX={[5]}
               paddingY={[4]}
               radius={3}
@@ -428,7 +386,7 @@ const DeployItem: React.FC<DeployItemProps> = ({
                 type="button"
                 tone="critical"
                 onClick={() => {
-                  onCancel(deploymentData.deployments[0].uid, vercelToken)
+                  onCancel(deploymentData.result[0].id)
                 }}
                 radius={3}
                 text="Cancel"
@@ -436,7 +394,7 @@ const DeployItem: React.FC<DeployItemProps> = ({
             )}
 
             <MenuButton
-              id={_id}
+              id={id}
               button={
                 <Button
                   mode="bleed"
@@ -451,7 +409,7 @@ const DeployItem: React.FC<DeployItemProps> = ({
                     text="History"
                     icon={ClockIcon}
                     onClick={() => setIsHistoryOpen(true)}
-                    disabled={!deploymentData?.deployments.length}
+                    disabled={!deploymentData?.result.length}
                   />
                   <MenuItem
                     text="Edit"
@@ -465,7 +423,7 @@ const DeployItem: React.FC<DeployItemProps> = ({
                       text="Delete"
                       icon={TrashIcon}
                       tone="critical"
-                      onClick={() => onRemove(name, _id)}
+                      onClick={() => onRemove(name, id)}
                     />
                   )}
                 </Menu>
@@ -499,9 +457,9 @@ const DeployItem: React.FC<DeployItemProps> = ({
                   onClick={() => onSubmitEdit()}
                   disabled={
                     isSubmitting ||
-                    !pendingDeploy.project ||
-                    !pendingDeploy.url ||
-                    !pendingDeploy.token
+                    !pendingDeploy.cloudflareProject ||
+                    !pendingDeploy.cloudflareApiEndpointUrl ||
+                    !pendingDeploy.cloudflareAPIKey
                   }
                 />
               </Grid>
@@ -539,31 +497,14 @@ const DeployItem: React.FC<DeployItemProps> = ({
               >
                 <TextInput
                   type="text"
-                  value={pendingDeploy.project}
+                  value={pendingDeploy.cloudflareProject}
                   onChange={(e) => {
                     e.persist()
-                    const project = (e.target as HTMLInputElement).value
+                    const cloudflareProject = (e.target as HTMLInputElement)
+                      .value
                     setpendingDeploy((prevState) => ({
                       ...prevState,
-                      ...{ project },
-                    }))
-                  }}
-                />
-              </FormField>
-
-              <FormField
-                title="Vercel Team Name"
-                description={`Required for projects under a Vercel Team: Settings → General → "Team Name"`}
-              >
-                <TextInput
-                  type="text"
-                  value={pendingDeploy.team}
-                  onChange={(e) => {
-                    e.persist()
-                    const team = (e.target as HTMLInputElement).value
-                    setpendingDeploy((prevState) => ({
-                      ...prevState,
-                      ...{ team },
+                      ...{ cloudflareProject },
                     }))
                   }}
                 />
@@ -576,14 +517,52 @@ const DeployItem: React.FC<DeployItemProps> = ({
                 <TextInput
                   type="text"
                   inputMode="url"
-                  value={pendingDeploy.url}
+                  value={pendingDeploy.cloudflareApiEndpointUrl}
                   onChange={(e) => {
                     e.persist()
-                    const pendingDeployUrl = (e.target as HTMLInputElement)
+                    const cloudflareApiEndpointUrl = (
+                      e.target as HTMLInputElement
+                    ).value
+                    setpendingDeploy((prevState) => ({
+                      ...prevState,
+                      ...{ cloudflareApiEndpointUrl },
+                    }))
+                  }}
+                />
+              </FormField>
+
+              <FormField
+                title="Cloudflare Email"
+                description={`Vercel Project: Settings → Git → "Deploy Hooks"`}
+              >
+                <TextInput
+                  type="text"
+                  value={pendingDeploy.cloudflareEmail}
+                  onChange={(e) => {
+                    e.persist()
+                    const cloudflareEmail = (e.target as HTMLInputElement).value
+                    setpendingDeploy((prevState) => ({
+                      ...prevState,
+                      ...{ cloudflareEmail },
+                    }))
+                  }}
+                />
+              </FormField>
+
+              <FormField
+                title="Cloudflare Key"
+                description={`Vercel Project: Settings → Git → "Deploy Hooks"`}
+              >
+                <TextInput
+                  type="text"
+                  value={pendingDeploy.cloudflareAPIKey}
+                  onChange={(e) => {
+                    e.persist()
+                    const cloudflareAPIKey = (e.target as HTMLInputElement)
                       .value
                     setpendingDeploy((prevState) => ({
                       ...prevState,
-                      ...{ url: pendingDeployUrl },
+                      ...{ cloudflareAPIKey },
                     }))
                   }}
                 />
@@ -631,10 +610,11 @@ const DeployItem: React.FC<DeployItemProps> = ({
           width={2}
         >
           <DeployHistory
-            url={url}
-            vercelProject={projectData.id}
-            vercelToken={vercelToken}
-            vercelTeam={vercelTeam}
+            _id={_id}
+            cloudflareApiEndpointUrl={cloudflareApiEndpointUrl}
+            cloudflareProject={cloudflareProject}
+            cloudflareAPIKey={cloudflareAPIKey}
+            cloudflareEmail={cloudflareEmail}
           />
         </Dialog>
       )}
