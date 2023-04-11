@@ -26,7 +26,6 @@ import { FormField, useColorScheme } from 'sanity'
 import DeployItem from './deploy-item'
 import { useClient } from './hook/useClient'
 import type { SanityDeploySchema } from './types'
-import { cloudflarePagesDeployTool } from 'sanity-plugin-cloudflare-pages-deploy'
 
 const initialDeploy = {
   name: '',
@@ -39,7 +38,7 @@ const initialDeploy = {
   disableDeleteAction: false,
 }
 
-const VercelDeploy = () => {
+const CloudflarePagesDeploy = () => {
   const WEBHOOK_TYPE = 'webhook_deploy'
   const WEBHOOK_QUERY = `*[_type == "${WEBHOOK_TYPE}"] | order(_createdAt)`
   const client = useClient()
@@ -58,7 +57,7 @@ const VercelDeploy = () => {
       .create({
         // Explicitly define an _id inside the vercel-deploy path to make sure it's not publicly accessible
         // This will protect users' tokens & project info. Read more: https://www.sanity.io/docs/ids
-        _id: `vercel-deploy.${nanoid()}`,
+        _id: `cloudflare-pages-deploy.${nanoid()}`,
         _type: WEBHOOK_TYPE,
         name: pendingDeploy.title,
         cloudflareApiEndpointUrl: pendingDeploy.cloudflareApiEndpointUrl,
@@ -335,8 +334,8 @@ const VercelDeploy = () => {
                 </FormField>
 
                 <FormField
-                  title="Vercel Project Name"
-                  description={`Vercel Project: Settings → General → "Project Name"`}
+                  title="Cloudflare Pages Project Name"
+                  description={`The exact name of the associated project on Cloudflare`}
                 >
                   <TextInput
                     type="text"
@@ -354,8 +353,8 @@ const VercelDeploy = () => {
                 </FormField>
 
                 <FormField
-                  title="Vercel Team Name"
-                  description={`Required for projects under a Vercel Team: Settings → General → "Team Name"`}
+                  title="Cloudflare Email"
+                  description={`This is the email associated with the key`}
                 >
                   <TextInput
                     type="text"
@@ -373,8 +372,27 @@ const VercelDeploy = () => {
                 </FormField>
 
                 <FormField
-                  title="Deploy Hook URL"
-                  description={`Vercel Project: Settings → Git → "Deploy Hooks"`}
+                  title="Cloudflare API Key"
+                  description={`The Cloudflare API key from your account settings`}
+                >
+                  <TextInput
+                    type="text"
+                    value={pendingDeploy.cloudflareAPIKey}
+                    onChange={(e) => {
+                      e.persist()
+                      const cloudflareAPIKey = (e.target as HTMLInputElement)
+                        .value
+                      setpendingDeploy((prevState) => ({
+                        ...prevState,
+                        ...{ cloudflareAPIKey },
+                      }))
+                    }}
+                  />
+                </FormField>
+
+                <FormField
+                  title="Cloudflare API Endpoint URL"
+                  description={`URL to your proxy for the Cloudflare API - Likely a Cloudflare Worker URL`}
                 >
                   <TextInput
                     type="text"
@@ -388,25 +406,6 @@ const VercelDeploy = () => {
                       setpendingDeploy((prevState) => ({
                         ...prevState,
                         ...{ cloudflareApiEndpointUrl },
-                      }))
-                    }}
-                  />
-                </FormField>
-
-                <FormField
-                  title="Vercel Token"
-                  description={`Vercel Account dropdown: Settings → "Tokens"`}
-                >
-                  <TextInput
-                    type="text"
-                    value={pendingDeploy.cloudflareAPIKey}
-                    onChange={(e) => {
-                      e.persist()
-                      const cloudflareAPIKey = (e.target as HTMLInputElement)
-                        .value
-                      setpendingDeploy((prevState) => ({
-                        ...prevState,
-                        ...{ cloudflareAPIKey },
                       }))
                     }}
                   />
@@ -450,4 +449,4 @@ const VercelDeploy = () => {
   )
 }
 
-export default VercelDeploy
+export default CloudflarePagesDeploy
